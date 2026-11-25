@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 from typing import Any
 
@@ -24,6 +25,7 @@ from .const import (
 )
 from .session import account_from_data, link_from_saved
 from .snapshot import keep, parse_status
+from .trips import TripLog
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.entry = entry
+        self.trips = TripLog(hass.config.path("geely_trips.json"))
         self._client = GeelyClient(GuardedTransport(TlsTransport()))
         self._catalogues: dict[str, list] = {}
         active = int(entry.options.get(CONF_ACTIVE_SECONDS, DEFAULT_ACTIVE_SECONDS))
@@ -72,6 +75,7 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             parsed["reservation"] = keep(reservation)
             parsed["catalogue"] = keep(self._catalogues.get(vin, []))
             found[vin] = parsed
+            self._remember_trip(vin, parsed, raw)
             if parsed.get("engine_on") or parsed.get("charging"):
                 moving = True
         parked = int(self.entry.options.get(
@@ -80,6 +84,25 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             CONF_ACTIVE_SECONDS, DEFAULT_ACTIVE_SECONDS))
         self.update_interval = timedelta(seconds=active if moving else parked)
         return found
+
+    def _remember_trip(self, vin: str, parsed: dict, raw: Any) -> None:
+        when = time.time()
+        if isinstance(raw, dict):
+            vehicle = raw.get("vehicleStatus")
+            stamp = vehicle.get("updateTime") if isinstance(vehicle, dict) else None
+            if isinstance(stamp, (int, float)) and not isinstance(stamp, bool) and stamp > 0:
+                when = float(stamp) / 1000.0
+        try:
+            self.trips.observe(vin, {
+                "t": when,
+                "engine_on": parsed.get("engine_on"),
+                "odometer_km": parsed.get("odometer_km"),
+                "latitude": parsed.get("latitude"),
+                "longitude": parsed.get("longitude"),
+                "altitude_m": parsed.get("altitude_m"),
+            })
+        except Exception as err:
+            _LOGGER.debug("trip record failed: %s", type(err).__name__)
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         try:

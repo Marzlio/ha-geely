@@ -18,6 +18,7 @@ from .const import (
     CONF_IDFV,
     CONF_TOKEN,
     CONF_USER_ID,
+    CONF_VEHICLES,
 )
 
 

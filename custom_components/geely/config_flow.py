@@ -122,7 +122,7 @@ class GeelyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     await self.hass.async_add_executor_job(
                         send_code, email, country, self._device)
                 except Exception as err:  # noqa: BLE001
-                    _LOGGER.warning("code request failed: %s", _error_key(err))
+                    _LOGGER.warning("code request failed: %s (%s)", _error_key(err), type(err).__name__)
                     errors["base"] = _error_key(err)
                 else:
                     return await self.async_step_code()
@@ -140,7 +140,7 @@ class GeelyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     complete_sign_in, self._email, code, self._country, self._device)
             except Exception as err:  # noqa: BLE001
                 key = _error_key(err)
-                _LOGGER.warning("sign-in failed: %s", key)
+                _LOGGER.warning("sign-in failed: %s (%s)", key, type(err).__name__)
                 if key == "no_vehicles":
                     return self.async_abort(reason="no_vehicles")
                 errors["base"] = key

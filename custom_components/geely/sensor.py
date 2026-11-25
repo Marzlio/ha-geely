@@ -42,6 +42,7 @@ async def async_setup_entry(
         [GeelySensor(coordinator, car["vin"], spec)
          for car in cars for spec in SENSORS]
         + [GeelyFullStatus(coordinator, car["vin"]) for car in cars]
+        + [GeelyTrips(coordinator, car["vin"]) for car in cars]
     )
 
 
@@ -100,3 +101,19 @@ class GeelyFullStatus(GeelyEntity, SensorEntity):
             "reservation": self.car.get("reservation") or {},
             "catalogue": self.car.get("catalogue") or [],
         }
+
+
+class GeelyTrips(GeelyEntity, SensorEntity):
+    """Whether a drive is being recorded, and the saved drives without their routes."""
+
+    def __init__(self, coordinator: GeelyCoordinator, vin: str) -> None:
+        super().__init__(coordinator, vin, "trips", "Trips")
+
+    @property
+    def native_value(self):
+        return self.coordinator.trips.summary(self._vin)["state"]
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        summary = self.coordinator.trips.summary(self._vin)
+        return {"saved": summary["saved"], "trips": summary["trips"]}
