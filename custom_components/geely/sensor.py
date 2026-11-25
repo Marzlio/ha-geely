@@ -37,10 +37,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: GeelyCoordinator = entry.runtime_data
+    cars = entry.data.get(CONF_VEHICLES, [])
     async_add_entities(
-        GeelySensor(coordinator, car["vin"], spec)
-        for car in entry.data.get(CONF_VEHICLES, [])
-        for spec in SENSORS
+        [GeelySensor(coordinator, car["vin"], spec)
+         for car in cars for spec in SENSORS]
+        + [GeelyFullStatus(coordinator, car["vin"]) for car in cars]
     )
 
 
@@ -72,3 +73,30 @@ class GeelySensor(GeelyEntity, SensorEntity):
                 "valid": self.car.get("outside_valid"),
             }
         return {}
+
+
+class GeelyFullStatus(GeelyEntity, SensorEntity):
+    """The whole reply, so a dashboard can use any field later.
+
+    The state is the car's own timestamp. The attributes are the records."""
+
+    def __init__(self, coordinator: GeelyCoordinator, vin: str) -> None:
+        super().__init__(coordinator, vin, "full_status", "Full status")
+
+    @property
+    def native_value(self):
+        status = self.car.get("status")
+        if isinstance(status, dict):
+            vehicle = status.get("vehicleStatus")
+            if isinstance(vehicle, dict) and vehicle.get("updateTime") is not None:
+                return str(vehicle["updateTime"])
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "status": self.car.get("status") or {},
+            "state": self.car.get("state") or {},
+            "reservation": self.car.get("reservation") or {},
+            "catalogue": self.car.get("catalogue") or [],
+        }

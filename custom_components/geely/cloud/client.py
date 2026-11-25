@@ -606,6 +606,34 @@ class GeelyClient:
         data = reply.get("data")
         return data if isinstance(data, dict) else {}
 
+    def _read_data(self, account: Account, link: VehicleLink, target: str) -> Any:
+        """The data of one extra read. None when that read did not succeed.
+        An ended sign-in is still raised, so polling stops."""
+        try:
+            reply = self._read(account, link, target)
+        except GeelyError as exc:
+            if exc.kind == "auth":
+                raise
+            return None
+        code = _code_of(reply)
+        if code is not None and code not in _STATUS_OK_CODES:
+            return None
+        return reply.get("data")
+
+    def read_vehicle_state(self, account: Account, link: VehicleLink) -> dict | None:
+        """The second status record. It carries flags the main snapshot does
+        not. A read of what the cloud already holds."""
+        data = self._read_data(
+            account, link, f"/remote-control/vehicle/status/state/{link.vin}")
+        return data if isinstance(data, dict) else None
+
+    def read_charging_reservation(self, account: Account,
+                                  link: VehicleLink) -> dict | None:
+        """The saved charging reservation, as a read. Nothing is written."""
+        data = self._read_data(
+            account, link, f"/remote-control/charging/reservation/{link.vin}")
+        return data if isinstance(data, dict) else None
+
     def read_catalogue(self, account: Account, link: VehicleLink) -> list | None:
         """The car's capability catalogue: the names of the features it has.
         None when it could not be read."""

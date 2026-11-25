@@ -23,7 +23,7 @@ from .const import (
     DOMAIN,
 )
 from .session import account_from_data, link_from_saved
-from .snapshot import parse_status
+from .snapshot import keep, parse_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.entry = entry
         self._client = GeelyClient(GuardedTransport(TlsTransport()))
+        self._catalogues: dict[str, list] = {}
         active = int(entry.options.get(CONF_ACTIVE_SECONDS, DEFAULT_ACTIVE_SECONDS))
         super().__init__(
             hass,
@@ -50,6 +51,13 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             try:
                 link = link_from_saved(saved)
                 raw = self._client.read_status(account, link)
+                state = self._client.read_vehicle_state(account, link)
+                reservation = self._client.read_charging_reservation(account, link)
+                vin = str(saved["vin"])
+                if vin not in self._catalogues:
+                    catalogue = self._client.read_catalogue(account, link)
+                    if isinstance(catalogue, list):
+                        self._catalogues[vin] = catalogue
             except GeelyError as err:
                 if err.kind == "auth":
                     raise ConfigEntryAuthFailed("Sign-in expired") from None
@@ -59,7 +67,11 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             parsed = parse_status(raw)
             parsed["name"] = saved.get("name") or "Geely"
             parsed["series"] = saved.get("series") or ""
-            found[str(saved["vin"])] = parsed
+            parsed["status"] = keep(raw)
+            parsed["state"] = keep(state)
+            parsed["reservation"] = keep(reservation)
+            parsed["catalogue"] = keep(self._catalogues.get(vin, []))
+            found[vin] = parsed
             if parsed.get("engine_on") or parsed.get("charging"):
                 moving = True
         parked = int(self.entry.options.get(

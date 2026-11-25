@@ -77,6 +77,25 @@ def _flag(raw: Any) -> bool | None:
     return str(raw).strip().lower() in ("true", "1")
 
 
+def keep(value: Any) -> Any:
+    """A JSON-safe copy of one record. Account credentials are removed.
+    Everything the car sent, including empty groups, stays."""
+    if isinstance(value, dict):
+        return {key: keep(item) for key, item in value.items()
+                if isinstance(key, str) and _keep_key(key)}
+    if isinstance(value, list):
+        return [keep(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return None
+
+
+def _keep_key(key: str) -> bool:
+    folded = key.lower().replace("_", "")
+    return not any(word in folded for word in (
+        "token", "email", "secret", "password", "certificate"))
+
+
 def parse_status(data: Any) -> dict[str, Any]:
     """The entity values for one snapshot. Never raises on a short reply."""
     if not isinstance(data, dict):

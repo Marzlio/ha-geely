@@ -41,11 +41,17 @@ Battery, range, speed, average speed, odometer, temperatures, altitude,
 direction, 12 V voltage, service distance and days, charge connection and
 time to full, consumption when the car sends it, tyre pressures when the
 car sends them, engine, park brake, seatbelts, doors, boot, bonnet, locks,
-charging, and the last reported position.
+charging, and the last reported position are entities you can use now.
 
-A speed or outside temperature the car marks invalid is left empty. The raw
-number is kept on the speed and outside-temperature entities as the
-`reported` attribute, with `valid` false.
+The **Full status** sensor keeps every field for a later dashboard. Its
+attributes are `status` (the whole main reply), `state` (the second status
+record), `reservation` (the saved charging reservation) and `catalogue`
+(what the car says it supports). The sensor's state is the car's own
+timestamp, so Home Assistant history keeps each new reply.
+
+A speed or outside temperature the car marks invalid is left empty on its
+own entity. The number is still in the full status, and on those entities
+as the `reported` attribute, with `valid` false.
 
 The position comes from the status the car already uploaded. This integration
 does not ask the car to take a fresh GPS fix.

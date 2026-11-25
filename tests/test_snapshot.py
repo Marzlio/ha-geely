@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 
 from custom_components.geely.cloud.guard import ALLOWED
-from custom_components.geely.snapshot import parse_status
+from custom_components.geely.snapshot import keep, parse_status
 
 
 def _sample() -> dict:
@@ -90,6 +90,16 @@ class Snapshot(unittest.TestCase):
         self.assertTrue(parsed["pre_climate"])
         self.assertIsNone(parsed["tyre_driver_kpa"])
         self.assertEqual(parsed["park_brake"], "Released")
+
+    def test_the_whole_reply_is_kept(self):
+        raw = _sample()
+        raw["result"] = {"sessionId": "TX1", "accessToken": "nope"}
+        kept = keep(raw)
+        self.assertEqual(kept["result"]["sessionId"], "TX1")
+        self.assertNotIn("accessToken", kept["result"])
+        self.assertEqual(
+            kept["vehicleStatus"]["basicVehicleStatus"]["speed"], "85.0")
+        self.assertEqual(keep({"list": []}), {"list": []})
 
     def test_a_short_reply_does_not_invent_values(self):
         parsed = parse_status({"vehicleStatus": {}})

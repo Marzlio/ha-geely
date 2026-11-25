@@ -44,6 +44,10 @@ ALLOWED: tuple[tuple[str, str, str, str], ...] = (
      r"/auth-center/account/session"),
     ("read vehicle status", "GET", _READ_HOSTS,
      rf"/remote-control/vehicle/status/{_VEHICLE}"),
+    ("read vehicle state", "GET", _READ_HOSTS,
+     rf"/remote-control/vehicle/status/state/{_VEHICLE}"),
+    ("read charging reservation", "GET", _READ_HOSTS,
+     rf"/remote-control/charging/reservation/{_VEHICLE}"),
     ("read capability catalogue", "GET", _READ_HOSTS,
      rf"/geelyTCAccess/tcservices/capability/{_VEHICLE}"),
 )
