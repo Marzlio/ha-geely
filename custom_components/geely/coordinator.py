@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .cloud.client import GeelyClient, GeelyError
+from .cloud.client import GeelyClient, GeelyError, VehicleLink
 from .cloud.regions import RegionUnavailable
 from .cloud.transport import GuardedTransport, TlsTransport
 from .const import (
@@ -38,6 +38,9 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self.trips = TripLog(hass.config.path("geely_trips.json"))
         self._client = GeelyClient(GuardedTransport(TlsTransport()))
         self._catalogues: dict[str, list] = {}
+        # The read token lives on the link. A new link every poll would open
+        # a new Geely session every poll, and Geely allows only one.
+        self._links: dict[str, VehicleLink] = {}
         active = int(entry.options.get(CONF_ACTIVE_SECONDS, DEFAULT_ACTIVE_SECONDS))
         super().__init__(
             hass,
@@ -52,7 +55,7 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         moving = False
         for saved in self.entry.data.get(CONF_VEHICLES, []):
             try:
-                link = link_from_saved(saved)
+                link = self._link_for(saved)
                 raw = self._client.read_status(account, link)
                 state = self._client.read_vehicle_state(account, link)
                 reservation = self._client.read_charging_reservation(account, link)
@@ -63,6 +66,8 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                         self._catalogues[vin] = catalogue
             except GeelyError as err:
                 if err.kind == "auth":
+                    _LOGGER.warning(
+                        "Geely ended the sign-in (result %s)", err.code or "unknown")
                     raise ConfigEntryAuthFailed("Sign-in expired") from None
                 raise UpdateFailed(err.kind) from None
             except RegionUnavailable:
@@ -84,6 +89,15 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             CONF_ACTIVE_SECONDS, DEFAULT_ACTIVE_SECONDS))
         self.update_interval = timedelta(seconds=active if moving else parked)
         return found
+
+    def _link_for(self, saved: dict) -> VehicleLink:
+        """The same open channel across polls, so the read token is reused."""
+        vin = str(saved["vin"])
+        link = self._links.get(vin)
+        if link is None:
+            link = link_from_saved(saved)
+            self._links[vin] = link
+        return link
 
     def _remember_trip(self, vin: str, parsed: dict, raw: Any) -> None:
         when = time.time()
