@@ -1,0 +1,45 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Geely",
+        "description": "Geely emails a one-time code. It does not use a password. South African cars on the international app sign in with United Kingdom, which is the default.",
+        "data": {
+          "email": "Email",
+          "country": "Country"
+        }
+      },
+      "code": {
+        "title": "Email code",
+        "description": "Enter the code from the email. Request it only once. A second request too soon is refused and the first code stops working.",
+        "data": {
+          "code": "One-time code"
+        }
+      },
+      "init": {
+        "title": "How often to read the car",
+        "description": "While the engine is on or the car is charging, and while it is parked. A parked car does not upload a new position, and this read does not wake it.",
+        "data": {
+          "active_seconds": "Seconds between reads while driving or charging",
+          "parked_seconds": "Seconds between reads while parked"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Geely could not be reached.",
+      "cannot_send": "Geely did not send a code. Wait a couple of minutes and try once.",
+      "invalid_code": "That code was not accepted.",
+      "invalid_auth": "Sign-in was refused. Check the email and country.",
+      "region": "This car is registered in an area the published client cannot sign.",
+      "unknown": "Something went wrong. Nothing was changed."
+    },
+    "abort": {
+      "already_configured": "This account is already set up.",
+      "no_vehicles": "The account has no car.",
+      "cannot_connect": "Geely could not be reached.",
+      "cannot_send": "Geely did not send a code. Wait a couple of minutes and start re-authentication again.",
+      "region": "This car is registered in an area the published client cannot sign.",
+      "reauth_successful": "Signed in again."
+    }
+  }
+}

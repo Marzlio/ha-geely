@@ -1,0 +1,19 @@
+{
+  "domain": "geely",
+  "name": "Geely",
+  "codeowners": ["@Marzlio"],
+  "config_flow": true,
+  "documentation": "https://github.com/Marzlio/ha-geely",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Marzlio/ha-geely/issues",
+  "loggers": ["custom_components.geely"],
+  "requirements": [
+    "certifi>=2026.1.4",
+    "cryptography>=44.0.0",
+    "numpy>=2.0.0",
+    "pillow>=11.0.0",
+    "scipy>=1.14.0"
+  ],
+  "version": "0.1.0"
+}
