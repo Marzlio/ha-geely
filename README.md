@@ -56,10 +56,11 @@ as the `reported` attribute, with `valid` false.
 The position comes from the status the car already uploaded. This integration
 does not ask the car to take a fresh GPS fix.
 
-While the engine is on or the car is charging, it reads about every 45
-seconds. While parked, about every 10 minutes. Both are on the integration's
-Configure page. A parked car often repeats the same report. The read does
-not wake it.
+It reads about every 45 seconds while the car is driving, charging, or
+parked. Both intervals are on the integration's Configure page. A parked
+car often repeats the same report until it uploads a new one. The read
+does not wake it. Checking this often is what notices a drive that starts
+between reads.
 
 ## Install with HACS
 

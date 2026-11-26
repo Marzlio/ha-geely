@@ -69,7 +69,7 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
                 default=int(entry.options.get(
                     CONF_PARKED_SECONDS, DEFAULT_PARKED_SECONDS)),
             ): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=60, max=3600, step=1, mode="box")
+                selector.NumberSelectorConfig(min=30, max=3600, step=1, mode="box")
             ),
         }
     )

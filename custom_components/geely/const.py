@@ -18,7 +18,7 @@ CONF_ACTIVE_SECONDS = "active_seconds"
 CONF_PARKED_SECONDS = "parked_seconds"
 
 DEFAULT_ACTIVE_SECONDS = 45
-DEFAULT_PARKED_SECONDS = 600
+DEFAULT_PARKED_SECONDS = 45
 
 PLATFORMS = ("sensor", "binary_sensor", "device_tracker")
 
