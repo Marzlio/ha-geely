@@ -1,4 +1,4 @@
-"""Where the car last reported it was. The read does not wake the car."""
+"""Where the car last reported it was. A quiet car is asked to upload."""
 
 from __future__ import annotations
 

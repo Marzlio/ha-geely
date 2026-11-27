@@ -1,4 +1,9 @@
-"""Polling coordinator. One read of each car, on a timer. No commands."""
+"""Polling coordinator. One read of each car, on a timer.
+
+When the cloud copy has gone quiet, one request asks the car to upload a
+fresh status. That is the request the Geely app sends when its map is opened,
+and it wakes the car. It is not sent on every poll.
+"""
 
 from __future__ import annotations
 
@@ -22,9 +27,10 @@ from .const import (
     DEFAULT_ACTIVE_SECONDS,
     DEFAULT_PARKED_SECONDS,
     DOMAIN,
+    WAKE_SETTLE_SECONDS,
 )
 from .session import account_from_data, link_from_saved
-from .snapshot import keep, parse_status
+from .snapshot import fresh_upload_due, keep, parse_status, report_age_seconds
 from .trips import TripLog
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,6 +47,8 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         # The read token lives on the link. A new link every poll would open
         # a new Geely session every poll, and Geely allows only one.
         self._links: dict[str, VehicleLink] = {}
+        self._woke_at: dict[str, float] = {}
+        self._force: set[str] = set()
         active = int(entry.options.get(CONF_ACTIVE_SECONDS, DEFAULT_ACTIVE_SECONDS))
         super().__init__(
             hass,
@@ -56,10 +64,11 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         for saved in self.entry.data.get(CONF_VEHICLES, []):
             try:
                 link = self._link_for(saved)
+                vin = str(saved["vin"])
                 raw = self._client.read_status(account, link)
+                raw = self._refresh_if_quiet(account, link, vin, raw)
                 state = self._client.read_vehicle_state(account, link)
                 reservation = self._client.read_charging_reservation(account, link)
-                vin = str(saved["vin"])
                 if vin not in self._catalogues:
                     catalogue = self._client.read_catalogue(account, link)
                     if isinstance(catalogue, list):
@@ -89,6 +98,34 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             CONF_ACTIVE_SECONDS, DEFAULT_ACTIVE_SECONDS))
         self.update_interval = timedelta(seconds=active if moving else parked)
         return found
+
+    def _refresh_if_quiet(self, account, link: VehicleLink, vin: str,
+                           raw: dict) -> dict:
+        """Ask a quiet car to upload, then read again. A manual fetch always asks."""
+        forced = vin in self._force
+        self._force.discard(vin)
+        since = (time.monotonic() - self._woke_at[vin]
+                 if vin in self._woke_at else 10**9)
+        if not fresh_upload_due(
+                report_age_seconds(raw, time.time()), since, forced=forced):
+            return raw
+        try:
+            self._client.request_upload(account, link)
+        except GeelyError as err:
+            if err.kind == "auth":
+                raise
+            _LOGGER.warning(
+                "status refresh was refused (result %s)", err.code or "unknown")
+            self._woke_at[vin] = time.monotonic()
+            return raw
+        self._woke_at[vin] = time.monotonic()
+        time.sleep(WAKE_SETTLE_SECONDS)
+        return self._client.read_status(account, link)
+
+    async def async_fetch(self, vin: str) -> None:
+        """Wake the car and read now, even if an automatic wake just happened."""
+        self._force.add(vin)
+        await self.async_request_refresh()
 
     def _link_for(self, saved: dict) -> VehicleLink:
         """The same open channel across polls, so the read token is reused."""

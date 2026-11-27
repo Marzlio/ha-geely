@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from .cloud import readings
+from .const import STALE_REPORT_SECONDS, WAKE_GAP_SECONDS
 
 _BASIC = ("vehicleStatus", "basicVehicleStatus")
 _ADD = ("vehicleStatus", "additionalVehicleStatus")
@@ -94,6 +95,31 @@ def _keep_key(key: str) -> bool:
     folded = key.lower().replace("_", "")
     return not any(word in folded for word in (
         "token", "email", "secret", "password", "certificate"))
+
+
+def report_age_seconds(data: Any, now: float) -> float | None:
+    """How old the car's own timestamp is, or None when the reply has none."""
+    if not isinstance(data, dict):
+        return None
+    vehicle = data.get("vehicleStatus")
+    stamp = vehicle.get("updateTime") if isinstance(vehicle, dict) else None
+    if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) or stamp <= 0:
+        return None
+    seconds = float(stamp) / 1000.0 if stamp > 10_000_000_000 else float(stamp)
+    return now - seconds
+
+
+def fresh_upload_due(age: float | None, since_wake: float, *,
+                     forced: bool = False) -> bool:
+    """Whether to ask the car to upload. A manual fetch always does.
+    An automatic one never runs twice inside the gap."""
+    if forced:
+        return True
+    if since_wake < WAKE_GAP_SECONDS:
+        return False
+    if age is None:
+        return True
+    return age >= STALE_REPORT_SECONDS
 
 
 def parse_status(data: Any) -> dict[str, Any]:

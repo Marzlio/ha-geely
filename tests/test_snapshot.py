@@ -5,7 +5,12 @@ from __future__ import annotations
 import unittest
 
 from custom_components.geely.cloud.guard import ALLOWED
-from custom_components.geely.snapshot import keep, parse_status
+from custom_components.geely.snapshot import (
+    fresh_upload_due,
+    keep,
+    parse_status,
+    report_age_seconds,
+)
 
 
 def _sample() -> dict:
@@ -108,13 +113,28 @@ class Snapshot(unittest.TestCase):
         self.assertIsNone(parsed["engine_on"])
 
 
+    def test_a_quiet_car_is_asked_to_upload_once(self):
+        self.assertTrue(fresh_upload_due(200, 1000))
+        self.assertFalse(fresh_upload_due(200, 30))
+        self.assertFalse(fresh_upload_due(20, 1000))
+        self.assertTrue(fresh_upload_due(None, 1000))
+        self.assertFalse(fresh_upload_due(None, 30))
+        self.assertTrue(fresh_upload_due(20, 30, forced=True))
+        self.assertEqual(
+            report_age_seconds(
+                {"vehicleStatus": {"updateTime": 1_700_000_000_000}},
+                1_700_000_100),
+            100)
+
+
 class AllowList(unittest.TestCase):
-    def test_nothing_on_the_list_asks_the_car_to_act(self):
+    def test_the_only_wake_is_the_status_upload(self):
+        puts = [row for row in ALLOWED if row[1] == "PUT"]
+        self.assertEqual(len(puts), 1)
+        self.assertIn("telematics", puts[0][3])
         blob = " ".join(" ".join(row) for row in ALLOWED)
-        for banned in ("telematics", "charge-server", "serviceId", "operationScheduling"):
+        for banned in ("charge-server", "serviceId", "operationScheduling"):
             self.assertNotIn(banned, blob)
-        methods = {row[1] for row in ALLOWED}
-        self.assertTrue(methods <= {"GET", "POST"})
 
 
 if __name__ == "__main__":

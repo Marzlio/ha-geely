@@ -18,7 +18,7 @@
       },
       "init": {
         "title": "How often to read the car",
-        "description": "While the engine is on or the car is charging, and while it is parked. A parked car does not upload a new position, and this read does not wake it.",
+        "description": "While the engine is on or the car is charging, and while it is parked. A quiet car is asked to upload at most once every 10 minutes.",
         "data": {
           "active_seconds": "Seconds between reads while driving or charging",
           "parked_seconds": "Seconds between reads while parked"

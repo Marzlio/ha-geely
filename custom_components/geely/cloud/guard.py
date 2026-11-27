@@ -3,8 +3,9 @@
 Every outbound request passes check() before a socket is opened. A request
 that is not on the list raises OutboundRefused and goes nowhere. The list
 holds sign-in, the vehicle list, the device certificate, the session exchange
-and two reads of the car. It holds no request that asks the car to do
-anything, and the tests pin its contents.
+the reads of the car, and one request that asks the car to upload a fresh
+status. That is the same request the Geely app sends when its map is opened.
+It wakes the car. The tests pin the list.
 """
 from __future__ import annotations
 
@@ -50,6 +51,8 @@ ALLOWED: tuple[tuple[str, str, str, str], ...] = (
      rf"/remote-control/charging/reservation/{_VEHICLE}"),
     ("read capability catalogue", "GET", _READ_HOSTS,
      rf"/geelyTCAccess/tcservices/capability/{_VEHICLE}"),
+    ("ask the car to upload its status", "PUT", _READ_HOSTS,
+     rf"/remote-control/vehicle/telematics/{_VEHICLE}"),
 )
 
 _COMPILED = tuple(

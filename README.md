@@ -53,14 +53,16 @@ A speed or outside temperature the car marks invalid is left empty on its
 own entity. The number is still in the full status, and on those entities
 as the `reported` attribute, with `valid` false.
 
-The position comes from the status the car already uploaded. This integration
-does not ask the car to take a fresh GPS fix.
-
 It reads about every 45 seconds while the car is driving, charging, or
-parked. Both intervals are on the integration's Configure page. A parked
-car often repeats the same report until it uploads a new one. The read
-does not wake it. Checking this often is what notices a drive that starts
-between reads.
+parked. Both intervals are on the integration's Configure page.
+
+The Geely app asks the car to upload a fresh status only when you open its
+map. There is no timer in the app. This integration sends that same request
+when the cloud copy is more than 3 minutes old, and at most once every 10
+minutes. Press **Fetch status** on the car's device page to send it now.
+A car that is already uploading, which it does while driving, is left alone
+by the timer. The request wakes the car and uses a little of the 12 V
+battery.
 
 ## Install with HACS
 

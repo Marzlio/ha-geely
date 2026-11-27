@@ -19,8 +19,15 @@ CONF_PARKED_SECONDS = "parked_seconds"
 
 DEFAULT_ACTIVE_SECONDS = 45
 DEFAULT_PARKED_SECONDS = 45
+# A quiet car is asked to upload at most this often. The Geely app does not
+# use a timer: it sends the same request only when its map is opened.
+WAKE_GAP_SECONDS = 600
+# The cloud copy is old enough that a new charge or a move would be missed.
+STALE_REPORT_SECONDS = 180
+# How long to wait after the wake before reading the upload.
+WAKE_SETTLE_SECONDS = 8
 
-PLATFORMS = ("sensor", "binary_sensor", "device_tracker")
+PLATFORMS = ("sensor", "binary_sensor", "device_tracker", "button")
 
 
 @dataclass(frozen=True)

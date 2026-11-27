@@ -560,14 +560,15 @@ class GeelyClient:
             assert link.jwt is not None
             return link.jwt
 
-    def _read(self, account: Account, link: VehicleLink, target: str) -> dict:
-        """A signed GET on the car's read gateway. If the session token was
+    def _signed(self, account: Account, link: VehicleLink, method: str,
+                target: str, body: bytes) -> dict:
+        """A signed call on the car's gateway. If the session token was
         invalidated, which another sign-in to the account does, it is renewed
-        once and the read repeated."""
+        once and the call repeated."""
         host = link.backend["control_host"]
 
         def attempt(token: str) -> dict:
-            headers = _signed_headers(link.backend, "GET", target, b"",
+            headers = _signed_headers(link.backend, method, target, body,
                                       link.device_id)
             headers.update({
                 "Authorization": token,
@@ -576,7 +577,7 @@ class GeelyClient:
                 "X-VEHICLE-MODEL": link.series,
                 "X-Vehicle-IDENTIFIER": link.vin,
             })
-            return self._send("GET", host, target, headers, b"", link.identity,
+            return self._send(method, host, target, headers, body, link.identity,
                               timeout=30)
 
         token = self._session_token(account, link)
@@ -592,11 +593,35 @@ class GeelyClient:
             raise GeelyError("auth", reply.get("code"))
         return reply
 
-    # -- the two reads --
+    def _read(self, account: Account, link: VehicleLink, target: str) -> dict:
+        return self._signed(account, link, "GET", target, b"")
+
+    def request_upload(self, account: Account, link: VehicleLink) -> None:
+        """Ask the car to upload a fresh status. This is the call the Geely
+        app sends when its map is opened. It wakes the car."""
+        body = json.dumps({
+            "command": "start",
+            "creator": "tc",
+            "latest": True,
+            "serviceId": "PAI",
+            "serviceParameters": [
+                {"key": "operation", "value": "4"},
+                {"key": "pai", "value": "1"},
+            ],
+            "timestamp": str(int(time.time() * 1000)),
+            "userId": account.user_id,
+        }, separators=(",", ":")).encode()
+        reply = self._signed(
+            account, link, "PUT",
+            f"/remote-control/vehicle/telematics/{link.vin}", body)
+        code = _code_of(reply)
+        if code is not None and code not in _STATUS_OK_CODES:
+            raise GeelyError("upstream", code)
+
+    # -- the reads --
 
     def read_status(self, account: Account, link: VehicleLink) -> dict:
-        """The car's latest uploaded snapshot. This reads what the cloud
-        already holds; it does not wake the car or ask it for anything."""
+        """The car's latest uploaded snapshot."""
         target = (f"/remote-control/vehicle/status/{link.vin}"
                   f"?userId={account.user_id}&latest=&target=")
         reply = self._read(account, link, target)
