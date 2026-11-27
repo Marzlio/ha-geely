@@ -30,7 +30,7 @@ from .const import (
     WAKE_SETTLE_SECONDS,
 )
 from .session import account_from_data, link_from_saved
-from .snapshot import fresh_upload_due, keep, parse_status, report_age_seconds
+from .snapshot import charge_rate, fresh_upload_due, keep, parse_status, report_age_seconds
 from .trips import TripLog
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,6 +82,7 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             except RegionUnavailable:
                 raise UpdateFailed("region") from None
             parsed = parse_status(raw)
+            parsed.update(charge_rate(raw, self._catalogues.get(vin)))
             parsed["name"] = saved.get("name") or "Geely"
             parsed["series"] = saved.get("series") or ""
             parsed["status"] = keep(raw)

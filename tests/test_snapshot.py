@@ -6,6 +6,7 @@ import unittest
 
 from custom_components.geely.cloud.guard import ALLOWED
 from custom_components.geely.snapshot import (
+    charge_rate,
     fresh_upload_due,
     keep,
     parse_status,
@@ -95,6 +96,20 @@ class Snapshot(unittest.TestCase):
         self.assertTrue(parsed["pre_climate"])
         self.assertIsNone(parsed["tyre_driver_kpa"])
         self.assertEqual(parsed["park_brake"], "Released")
+
+    def test_charge_power_is_the_live_supply(self):
+        data = _sample()
+        electric = data["vehicleStatus"]["additionalVehicleStatus"]["electricVehicleStatus"]
+        electric["statusOfChargerConnection"] = "3"
+        electric["chargeUAct"] = "230.4"
+        electric["chargeIAct"] = "28.0"
+        electric["dcDcConnectStatus"] = "0"
+        rate = charge_rate(data)
+        self.assertEqual(rate["charge_kw"], 6.45)
+        self.assertEqual(rate["charge_volts"], 230.4)
+        self.assertEqual(rate["charge_amps"], 28.0)
+        self.assertEqual(rate["charge_kind"], "AC")
+        self.assertIsNone(charge_rate(_sample())["charge_kw"])
 
     def test_the_whole_reply_is_kept(self):
         raw = _sample()

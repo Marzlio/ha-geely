@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from .cloud import readings
+from .cloud.capabilities import code_3_is_plugged
 from .const import STALE_REPORT_SECONDS, WAKE_GAP_SECONDS
 
 _BASIC = ("vehicleStatus", "basicVehicleStatus")
@@ -120,6 +121,32 @@ def fresh_upload_due(age: float | None, since_wake: float, *,
     if age is None:
         return True
     return age >= STALE_REPORT_SECONDS
+
+
+def charge_rate(data: Any, catalogue: Any = None) -> dict[str, Any]:
+    """Kilowatts, volts and amps of the live charge, or empty when it is not charging.
+
+    The leg is chosen the same way as the local page: the DC contactor for a
+    fast charge, otherwise the AC supply when it is actually delivering current.
+    """
+    empty = {"charge_kw": None, "charge_volts": None, "charge_amps": None, "charge_kind": None}
+    leg = readings._charge_leg(
+        data if isinstance(data, dict) else {},
+        code_3_is_plugged(catalogue if isinstance(catalogue, list) else None))
+    if leg is None:
+        return empty
+    volts, amps, is_ac = leg
+    if volts <= 0 or amps <= 0:
+        return empty
+    watts = volts * amps
+    if is_ac and volts >= 300:
+        watts *= 3.0 ** 0.5
+    return {
+        "charge_kw": round(watts / 1000.0, 2),
+        "charge_volts": round(volts, 1),
+        "charge_amps": round(amps, 1),
+        "charge_kind": "AC" if is_ac else "DC",
+    }
 
 
 def parse_status(data: Any) -> dict[str, Any]:

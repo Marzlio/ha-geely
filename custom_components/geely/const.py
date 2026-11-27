@@ -64,6 +64,7 @@ SENSORS: tuple[SensorSpec, ...] = (
     SensorSpec("distance_to_service_km", "Distance to service", "km", "distance"),
     SensorSpec("days_to_service", "Days to service", "d", None),
     SensorSpec("time_to_full_min", "Time to full charge", "min", None),
+    SensorSpec("charge_kw", "Charge power", "kW", "power"),
     SensorSpec("consumption_kwh_100", "Average consumption", "kWh/100km"),
     SensorSpec("trip_consumption_kwh_100", "Trip consumption", "kWh/100km"),
     SensorSpec("tyre_driver_kpa", "Tyre pressure, driver", "kPa", "pressure"),

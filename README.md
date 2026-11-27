@@ -38,8 +38,8 @@ ends the phone app's session.
 ## What you get
 
 Battery, range, speed, average speed, odometer, temperatures, altitude,
-direction, 12 V voltage, service distance and days, charge connection and
-time to full, consumption when the car sends it, tyre pressures when the
+direction, 12 V voltage, service distance and days, charge connection,
+charge power, time to full, consumption when the car sends it, tyre pressures when the
 car sends them, engine, park brake, seatbelts, doors, boot, bonnet, locks,
 charging, and the last reported position are entities you can use now.
 

@@ -22,6 +22,7 @@ _DEVICE = {
     "temperature": SensorDeviceClass.TEMPERATURE,
     "voltage": SensorDeviceClass.VOLTAGE,
     "pressure": SensorDeviceClass.PRESSURE,
+    "power": SensorDeviceClass.POWER,
 }
 _STATE = {
     "measurement": SensorStateClass.MEASUREMENT,
@@ -72,6 +73,12 @@ class GeelySensor(GeelyEntity, SensorEntity):
             return {
                 "reported": self.car.get("outside_reported"),
                 "valid": self.car.get("outside_valid"),
+            }
+        if self._key == "charge_kw":
+            return {
+                "volts": self.car.get("charge_volts"),
+                "amps": self.car.get("charge_amps"),
+                "supply": self.car.get("charge_kind"),
             }
         return {}
 
