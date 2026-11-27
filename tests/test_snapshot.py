@@ -7,10 +7,12 @@ import unittest
 from custom_components.geely.cloud.guard import ALLOWED
 from custom_components.geely.snapshot import (
     charge_rate,
+    consumption,
     fresh_upload_due,
     keep,
     parse_status,
     report_age_seconds,
+    reported_days,
 )
 
 
@@ -109,7 +111,20 @@ class Snapshot(unittest.TestCase):
         self.assertEqual(rate["charge_volts"], 230.4)
         self.assertEqual(rate["charge_amps"], 28.0)
         self.assertEqual(rate["charge_kind"], "AC")
+        self.assertEqual(rate["charge_source"], "measured")
         self.assertIsNone(charge_rate(_sample())["charge_kw"])
+
+    def test_charge_power_is_estimated_from_time_and_percent(self):
+        data = _sample()
+        electric = data["vehicleStatus"]["additionalVehicleStatus"]["electricVehicleStatus"]
+        electric["statusOfChargerConnection"] = "3"
+        electric["isCharging"] = "true"
+        electric["chargeLevel"] = "38"
+        electric["timeToFullyCharged"] = "540"
+        rate = charge_rate(data)
+        self.assertEqual(rate["charge_kw"], 2.71)
+        self.assertEqual(rate["charge_source"], "estimated")
+        self.assertIsNone(rate["charge_volts"])
 
     def test_the_whole_reply_is_kept(self):
         raw = _sample()
@@ -140,6 +155,63 @@ class Snapshot(unittest.TestCase):
                 {"vehicleStatus": {"updateTime": 1_700_000_000_000}},
                 1_700_000_100),
             100)
+
+
+class Duration(unittest.TestCase):
+    def test_time_to_full_reads_as_hours_and_minutes(self):
+        from custom_components.geely.cloud.readings import _duration
+
+        self.assertEqual(_duration(532), "8 h 52 min")
+        self.assertEqual(_duration(60), "1 h")
+        self.assertEqual(_duration(45), "45 min")
+        self.assertEqual(_duration(90), "1 h 30 min")
+
+
+class Consumption(unittest.TestCase):
+    def test_average_is_estimated_from_the_range_when_the_car_omits_it(self):
+        rate = consumption(_sample())
+        self.assertEqual(rate["consumption_kwh_100"], 11.45)
+        self.assertEqual(rate["consumption_source"], "estimated")
+        self.assertIsNone(rate["trip_consumption_kwh_100"])
+
+    def test_a_reported_average_is_kept(self):
+        data = _sample()
+        electric = data["vehicleStatus"]["additionalVehicleStatus"]["electricVehicleStatus"]
+        electric["averPowerConsumption"] = "16.4"
+        electric["averTraPowerConsumption"] = "12.1"
+        rate = consumption(data)
+        self.assertEqual(rate["consumption_kwh_100"], 16.4)
+        self.assertEqual(rate["consumption_source"], "measured")
+        self.assertEqual(rate["trip_consumption_kwh_100"], 12.1)
+        self.assertEqual(rate["trip_consumption_source"], "measured")
+
+    def test_the_constant_one_day_to_service_is_not_a_reading(self):
+        catalogue = [{"functionId": "remote_charge_1", "valueEnable": True}]
+        self.assertEqual(parse_status(_sample())["days_to_service"], 1)
+        self.assertIsNone(reported_days(1, catalogue))
+        self.assertEqual(reported_days(220, catalogue), 220)
+        self.assertEqual(reported_days(1, None), 1)
+
+    def test_a_drive_estimates_trip_consumption_from_the_battery_drop(self):
+        import os
+        import tempfile
+
+        from custom_components.geely.trips import TripLog
+
+        folder = tempfile.mkdtemp()
+        log = TripLog(os.path.join(folder, "trips.json"))
+        start = {
+            "t": 1_000, "engine_on": True, "odometer_km": 100.0,
+            "battery_pct": 80, "latitude": -25.0, "longitude": 28.0,
+        }
+        end = {
+            "t": 2_000, "engine_on": False, "odometer_km": 128.4,
+            "battery_pct": 71, "latitude": -25.1, "longitude": 28.1,
+        }
+        log.observe("CAR", start)
+        self.assertIsNone(log.kwh_per_100("CAR"))
+        log.observe("CAR", end)
+        self.assertEqual(log.kwh_per_100("CAR"), 12.49)
 
 
 class AllowList(unittest.TestCase):

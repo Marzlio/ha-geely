@@ -14,6 +14,8 @@ import threading
 from math import asin, cos, radians, sin, sqrt
 from typing import Any
 
+from .const import PACK_KWH
+
 _MIN_SAVE_KM = 0.2
 _MIN_SHOW_KM = 0.05
 _MIN_AVG_SECONDS = 45
@@ -74,6 +76,24 @@ def _average(distance_km: float, duration_s: float | None) -> float | None:
     if speed > _MAX_AVG_KMH:
         return None
     return round(speed, 1)
+
+
+def _kwh_per_100(trip: dict | None) -> float | None:
+    """Percent dropped times the pack size, over the kilometres of one drive."""
+    if not isinstance(trip, dict):
+        return None
+    start = _num(trip.get("start_pct"))
+    end = _num(trip.get("end_pct"))
+    km = _distance_km(trip)
+    if start is None or end is None or km < 5:
+        return None
+    drop = start - end
+    if drop < 1:
+        return None
+    per_100 = drop / 100.0 * PACK_KWH / km * 100.0
+    if not 4 <= per_100 <= 60:
+        return None
+    return round(per_100, 2)
 
 
 def _point(sample: dict) -> dict | None:
@@ -178,6 +198,21 @@ class TripLog:
                 "trips": rows,
             }
 
+    def kwh_per_100(self, vin: str) -> float | None:
+        """kWh/100 km from the battery used on the open drive, or the last one.
+
+        The car does not send a trip consumption, so this is the percent
+        dropped times the published pack size, divided by the kilometres.
+        """
+        with self._lock:
+            book = self._ready().get(vin) or {}
+            trip = book.get("open")
+            rate = _kwh_per_100(trip)
+            if rate is None:
+                saved = book.get("trips") or []
+                rate = _kwh_per_100(saved[-1] if saved else None)
+            return rate
+
     def tracks(self) -> dict[str, Any]:
         """Every saved drive, newest first, for the trips page."""
         with self._lock:
@@ -207,6 +242,9 @@ class TripLog:
                 "points": [],
             }
             book["open"] = trip
+            self._note_charge(trip, sample, opening=True)
+        else:
+            self._note_charge(trip, sample, opening=False)
         trip["ended"] = when
         if odometer is not None:
             trip["end_km"] = odometer
@@ -219,6 +257,7 @@ class TripLog:
         trip["ended"] = when
         if odometer is not None:
             trip["end_km"] = odometer
+        self._note_charge(trip, sample, opening=False)
         self._add_point(trip, sample)
         trip["points"] = _thin(trip["points"])
         distance = _distance_km(trip)
@@ -231,6 +270,14 @@ class TripLog:
             if len(book["trips"]) > _MAX_TRIPS:
                 book["trips"] = book["trips"][-_MAX_TRIPS:]
         book["open"] = None
+
+    def _note_charge(self, trip: dict, sample: dict, *, opening: bool) -> None:
+        pct = _num(sample.get("battery_pct"))
+        if pct is None or not 0 <= pct <= 100:
+            return
+        if opening or trip.get("start_pct") is None:
+            trip["start_pct"] = pct
+        trip["end_pct"] = pct
 
     def _add_point(self, trip: dict, sample: dict) -> None:
         point = _point(sample)

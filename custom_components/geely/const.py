@@ -26,6 +26,8 @@ WAKE_GAP_SECONDS = 600
 STALE_REPORT_SECONDS = 180
 # How long to wait after the wake before reading the upload.
 WAKE_SETTLE_SECONDS = 8
+# Published pack size for this E2. The car does not send it.
+PACK_KWH = 39.4
 
 PLATFORMS = ("sensor", "binary_sensor", "device_tracker", "button")
 
@@ -62,8 +64,8 @@ SENSORS: tuple[SensorSpec, ...] = (
     SensorSpec("direction_deg", "Direction", "°"),
     SensorSpec("aux_voltage", "12 V battery voltage", "V", "voltage"),
     SensorSpec("distance_to_service_km", "Distance to service", "km", "distance"),
-    SensorSpec("days_to_service", "Days to service", "d", None),
-    SensorSpec("time_to_full_min", "Time to full charge", "min", None),
+    SensorSpec("days_to_service", "Days to service", "d", None, None),
+    SensorSpec("time_to_full_min", "Time to full charge", None, None, None),
     SensorSpec("charge_kw", "Charge power", "kW", "power"),
     SensorSpec("consumption_kwh_100", "Average consumption", "kWh/100km"),
     SensorSpec("trip_consumption_kwh_100", "Trip consumption", "kWh/100km"),

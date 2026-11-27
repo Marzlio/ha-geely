@@ -30,7 +30,15 @@ from .const import (
     WAKE_SETTLE_SECONDS,
 )
 from .session import account_from_data, link_from_saved
-from .snapshot import charge_rate, fresh_upload_due, keep, parse_status, report_age_seconds
+from .snapshot import (
+    charge_rate,
+    consumption,
+    fresh_upload_due,
+    keep,
+    parse_status,
+    report_age_seconds,
+    reported_days,
+)
 from .trips import TripLog
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,7 +90,11 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             except RegionUnavailable:
                 raise UpdateFailed("region") from None
             parsed = parse_status(raw)
-            parsed.update(charge_rate(raw, self._catalogues.get(vin)))
+            catalogue = self._catalogues.get(vin)
+            parsed["days_to_service"] = reported_days(
+                parsed.get("days_to_service"), catalogue)
+            parsed.update(charge_rate(raw, catalogue))
+            parsed.update(consumption(raw))
             parsed["name"] = saved.get("name") or "Geely"
             parsed["series"] = saved.get("series") or ""
             parsed["status"] = keep(raw)
@@ -91,6 +103,11 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             parsed["catalogue"] = keep(self._catalogues.get(vin, []))
             found[vin] = parsed
             self._remember_trip(vin, parsed, raw)
+            if parsed.get("trip_consumption_kwh_100") is None:
+                rate = self.trips.kwh_per_100(vin)
+                if rate is not None:
+                    parsed["trip_consumption_kwh_100"] = rate
+                    parsed["trip_consumption_source"] = "estimated"
             if parsed.get("engine_on") or parsed.get("charging"):
                 moving = True
         parked = int(self.entry.options.get(
@@ -152,6 +169,7 @@ class GeelyCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 "latitude": parsed.get("latitude"),
                 "longitude": parsed.get("longitude"),
                 "altitude_m": parsed.get("altitude_m"),
+                "battery_pct": parsed.get("battery_pct"),
             })
         except Exception as err:
             _LOGGER.debug("trip record failed: %s", type(err).__name__)

@@ -11,7 +11,7 @@ from typing import Any
 
 from .cloud import readings
 from .cloud.capabilities import code_3_is_plugged
-from .const import STALE_REPORT_SECONDS, WAKE_GAP_SECONDS
+from .const import PACK_KWH, STALE_REPORT_SECONDS, WAKE_GAP_SECONDS
 
 _BASIC = ("vehicleStatus", "basicVehicleStatus")
 _ADD = ("vehicleStatus", "additionalVehicleStatus")
@@ -123,29 +123,111 @@ def fresh_upload_due(age: float | None, since_wake: float, *,
     return age >= STALE_REPORT_SECONDS
 
 
-def charge_rate(data: Any, catalogue: Any = None) -> dict[str, Any]:
-    """Kilowatts, volts and amps of the live charge, or empty when it is not charging.
+def _days(data: dict) -> int | None:
+    raw = _num(data, (*_MAINT, "daysToService"))
+    if raw is None or raw < 0:
+        return None
+    return int(round(raw))
 
-    The leg is chosen the same way as the local page: the DC contactor for a
-    fast charge, otherwise the AC supply when it is actually delivering current.
+
+def reported_days(days: Any, catalogue: Any) -> Any:
+    """Drop the constant 1 this car's cloud sends in place of a day count.
+
+    On the 1.0 charge scheme that 1 stays put while the distance to service
+    counts down, so it is not a reading. A real count still passes through.
     """
-    empty = {"charge_kw": None, "charge_volts": None, "charge_amps": None, "charge_kind": None}
-    leg = readings._charge_leg(
-        data if isinstance(data, dict) else {},
-        code_3_is_plugged(catalogue if isinstance(catalogue, list) else None))
-    if leg is None:
-        return empty
-    volts, amps, is_ac = leg
-    if volts <= 0 or amps <= 0:
-        return empty
-    watts = volts * amps
-    if is_ac and volts >= 300:
-        watts *= 3.0 ** 0.5
+    items = catalogue if isinstance(catalogue, list) else None
+    if days == 1 and code_3_is_plugged(items):
+        return None
+    return days
+
+
+def _from_range(data: dict) -> float | None:
+    """kWh/100 km implied by the energy left and the range the car is showing."""
+    percent = _num(data, (*_EV, "chargeLevel"))
+    distance = _num(data, (*_EV, "distanceToEmptyOnBatteryOnly"))
+    if percent is None or distance is None or percent < 10 or distance <= 0:
+        return None
+    per_100 = (percent / 100.0 * PACK_KWH) / distance * 100.0
+    if not 4 <= per_100 <= 60:
+        return None
+    return round(per_100, 2)
+
+
+def consumption(data: Any) -> dict[str, Any]:
+    """The two consumption figures, measured when the car sends them.
+
+    Average falls back to the range estimate. Trip stays empty here: a trip
+    needs a drive, and that figure is filled in from the recorded battery drop.
+    """
+    payload = data if isinstance(data, dict) else {}
+    average = readings._per_100(payload, "averPowerConsumption")
+    trip = readings._per_100(payload, "averTraPowerConsumption")
+    source = trip_source = None
+    if average is not None:
+        average = round(average, 2)
+        source = "measured"
+    else:
+        average = _from_range(payload)
+        if average is not None:
+            source = "estimated"
+    if trip is not None:
+        trip = round(trip, 2)
+        trip_source = "measured"
     return {
-        "charge_kw": round(watts / 1000.0, 2),
-        "charge_volts": round(volts, 1),
-        "charge_amps": round(amps, 1),
-        "charge_kind": "AC" if is_ac else "DC",
+        "consumption_kwh_100": average,
+        "consumption_source": source,
+        "trip_consumption_kwh_100": trip,
+        "trip_consumption_source": trip_source,
+    }
+
+
+def charge_rate(data: Any, catalogue: Any = None) -> dict[str, Any]:
+    """Kilowatts of the live charge, or empty when it is not charging.
+
+    Volts and amps win when the car sends them. Otherwise the rate is the
+    energy still to put in, from the published pack size and the percent
+    left, divided by the car's own time to full.
+    """
+    payload = data if isinstance(data, dict) else {}
+    plugged = code_3_is_plugged(catalogue if isinstance(catalogue, list) else None)
+    empty = {
+        "charge_kw": None, "charge_volts": None, "charge_amps": None,
+        "charge_kind": None, "charge_source": None,
+    }
+    leg = readings._charge_leg(payload, plugged)
+    if leg is not None:
+        volts, amps, is_ac = leg
+        if volts > 0 and amps > 0:
+            watts = volts * amps
+            if is_ac and volts >= 300:
+                watts *= 3.0 ** 0.5
+            return {
+                "charge_kw": round(watts / 1000.0, 2),
+                "charge_volts": round(volts, 1),
+                "charge_amps": round(amps, 1),
+                "charge_kind": "AC" if is_ac else "DC",
+                "charge_source": "measured",
+            }
+    if not readings.is_charging(payload, code_3_is_plugged=plugged):
+        return empty
+    percent = readings._number(readings.walk(
+        payload, ("vehicleStatus", "additionalVehicleStatus",
+                  "electricVehicleStatus", "chargeLevel")))
+    minutes = readings._minutes(readings.walk(
+        payload, ("vehicleStatus", "additionalVehicleStatus",
+                  "electricVehicleStatus", "timeToFullyCharged")))
+    if percent is None or minutes is None or not 0 <= percent < 100:
+        return empty
+    kw = (100.0 - percent) / 100.0 * PACK_KWH / (minutes / 60.0)
+    if kw <= 0:
+        return empty
+    return {
+        "charge_kw": round(kw, 2),
+        "charge_volts": None,
+        "charge_amps": None,
+        "charge_kind": None,
+        "charge_source": "estimated",
     }
 
 
@@ -188,7 +270,7 @@ def parse_status(data: Any) -> dict[str, Any]:
         "direction_deg": _num(data, (*_BASIC, "direction")),
         "aux_voltage": _num(data, (*_MAINT, "mainBatteryStatus", "voltage")),
         "distance_to_service_km": _num(data, (*_MAINT, "distanceToService")),
-        "days_to_service": _num(data, (*_MAINT, "daysToService")),
+        "days_to_service": _days(data),
         "time_to_full_min": readings._minutes(
             readings.walk(data, (*_EV, "timeToFullyCharged"))),
         "consumption_kwh_100": _num(data, (*_EV, "averPowerConsumption")),

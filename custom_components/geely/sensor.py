@@ -11,7 +11,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_VEHICLES, SENSORS
+from .cloud.readings import _duration
+from .const import CONF_VEHICLES, PACK_KWH, SENSORS
 from .coordinator import GeelyCoordinator
 from .entity import GeelyEntity
 
@@ -60,6 +61,11 @@ class GeelySensor(GeelyEntity, SensorEntity):
 
     @property
     def native_value(self):
+        if self._key == "time_to_full_min":
+            minutes = self.car.get("time_to_full_min")
+            if minutes is None:
+                return None
+            return _duration(minutes)
         return self.car.get(self._key)
 
     @property
@@ -74,11 +80,24 @@ class GeelySensor(GeelyEntity, SensorEntity):
                 "reported": self.car.get("outside_reported"),
                 "valid": self.car.get("outside_valid"),
             }
+        if self._key == "time_to_full_min":
+            return {"minutes": self.car.get("time_to_full_min")}
         if self._key == "charge_kw":
             return {
+                "source": self.car.get("charge_source"),
                 "volts": self.car.get("charge_volts"),
                 "amps": self.car.get("charge_amps"),
                 "supply": self.car.get("charge_kind"),
+                "pack_kwh": PACK_KWH if self.car.get("charge_source") == "estimated" else None,
+            }
+        if self._key in ("consumption_kwh_100", "trip_consumption_kwh_100"):
+            source_key = (
+                "consumption_source" if self._key == "consumption_kwh_100"
+                else "trip_consumption_source")
+            source = self.car.get(source_key)
+            return {
+                "source": source,
+                "pack_kwh": PACK_KWH if source == "estimated" else None,
             }
         return {}
 

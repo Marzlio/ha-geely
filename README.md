@@ -39,9 +39,19 @@ ends the phone app's session.
 
 Battery, range, speed, average speed, odometer, temperatures, altitude,
 direction, 12 V voltage, service distance and days, charge connection,
-charge power, time to full, consumption when the car sends it, tyre pressures when the
-car sends them, engine, park brake, seatbelts, doors, boot, bonnet, locks,
-charging, and the last reported position are entities you can use now.
+charge power, and time to full in hours and minutes. Charge power is the measured kilowatts
+when the car sends volts and amps. Otherwise it is estimated from the
+percent still to charge, the car's time to full, and the published
+39.4 kWh pack. Average consumption is the figure the car sends, or,
+when it does not, the energy left in that pack divided by the range it
+is showing. Trip consumption is the battery used on a recorded drive,
+once that drive is at least 5 km and the battery has dropped a percent.
+The attribute `source` says which. On the E2 the cloud sends a constant
+1 for days to service, so that sensor stays empty and the distance to
+service is the reading that counts. Tyre pressures when the
+car sends them, engine, park brake,
+seatbelts, doors, boot, bonnet, locks, charging, and the last reported
+position are entities you can use now.
 
 The **Full status** sensor keeps every field for a later dashboard. Its
 attributes are `status` (the whole main reply), `state` (the second status
